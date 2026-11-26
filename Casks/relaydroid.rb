@@ -1,9 +1,9 @@
 cask "relaydroid" do
   arch arm: "arm64", intel: "amd64"
 
-  version "0.4.0"
-  sha256 arm:   "80dd2c49dfcd2ee058582fa2cc4a4fedfbac8011a84a2daf1aba2b388e4e6dcd",
-         intel: "269e488b5c9498085aa2cea7edbe6483b6984faec40adb8441861de69790277f"
+  version "0.4.4"
+  sha256 arm:   "88650694a97efc2cd2566d1d1dc55c1e0cb7b93be295fcceb0b1813346dfb1b4",
+         intel: "72bd6b88aaec2069733a4b8883152c9e98a52ec476695fc67f26c9d294e59020"
 
   url "https://github.com/songkwon/relaydroid/releases/download/v#{version}/Relaydroid-macOS-#{arch}.zip"
   name "Relaydroid"
