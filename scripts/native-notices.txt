@@ -1,0 +1,12 @@
+Relay dynamically links libmtp and libusb. Each library can be replaced with a
+compatible build and the resulting application can be re-signed.
+
+libmtp 1.1.23
+https://github.com/libmtp/libmtp/tree/v1.1.23
+https://downloads.sourceforge.net/project/libmtp/libmtp/1.1.23/libmtp-1.1.23.tar.gz
+License: GNU Lesser General Public License 2.1 or later
+
+libusb 1.0.30
+https://github.com/libusb/libusb/tree/v1.0.30
+https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.tar.bz2
+License: GNU Lesser General Public License 2.1 or later
