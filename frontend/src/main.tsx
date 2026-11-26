@@ -65,6 +65,7 @@ function App() {
   const [scan, setScan] = useState<Scan>()
   const [scanning, setScanning] = useState(false)
   const scanRunning = useRef(false)
+  const scanVersion = useRef(0)
   const [preferred, setPreferred] = useState<Device>()
   const [local, setLocal] = useState<Location[]>([])
   const [remoteTrail, setRemoteTrail] = useState<{ key: string; locations: Location[] }>()
@@ -117,9 +118,11 @@ function App() {
   const rescan = useCallback(async (manual = false) => {
     if (scanRunning.current) return
     scanRunning.current = true
+    const version = scanVersion.current
     if (manual) setScanning(true)
     try {
-      setScan(await api.scan())
+      const snapshot = await api.scan()
+      if (version === scanVersion.current) setScan(snapshot)
     } catch (error) {
       if (manual) toast.error("无法刷新设备", { description: errorText(error) })
     } finally {
@@ -276,9 +279,11 @@ function App() {
   }
 
   const endLegacy = async () => {
+    const id = scan?.legacy
     await api.stopLegacy()
-    setPreferred(legacyOrigin.current ?? usb)
-    setScan(previous => previous ? { ...previous, legacy: undefined } : previous)
+    scanVersion.current++
+    if (owner?.id === id) setPreferred(legacyOrigin.current ?? usb)
+    setScan(previous => previous ? { ...previous, legacy: undefined, devices: previous.devices.filter(d => d.id !== id) } : previous)
     toast.success("已关闭手机上的临时无线连接")
     void rescan()
   }
@@ -287,7 +292,9 @@ function App() {
     try {
       if (device.id === scan?.legacy) return await endLegacy()
       await api.disconnect(device.id)
+      scanVersion.current++
       if (deviceKey(device) === ownerKey) setPreferred(usb)
+      setScan(previous => previous ? { ...previous, devices: previous.devices.filter(d => deviceKey(d) !== deviceKey(device)) } : previous)
       void rescan()
     } catch (error) { toast.error("无法断开连接", { description: errorText(error) }) }
   }
@@ -322,6 +329,7 @@ function App() {
           device = await api.connect(endpoint.trim())
         }
         if (device) {
+          scanVersion.current++
           selectDevice(device)
           toast.success("已连接 Wi-Fi")
           setDialog(undefined)
