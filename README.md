@@ -77,11 +77,11 @@ pwsh -File scripts/package-windows.ps1 -Architecture amd64
 
 ## 发布新版本
 
-1. 为要发布的提交推送稳定版本标签，例如 `v0.4.1`。[GitHub Actions](https://github.com/songkwon/relaydroid/actions/workflows/package.yml) 会构建四个安装包并创建 Release 草稿。
+1. 为要发布的提交推送稳定版本标签，例如 `v0.5.0`。[GitHub Actions](https://github.com/songkwon/relaydroid/actions/workflows/package.yml) 会构建四个安装包并创建 Release 草稿。
 2. 在装有 Developer ID Application 证书和公证钥匙串配置、且已登录 GitHub CLI 的 Mac 上运行发布脚本。它会签名并公证两个 Mac 安装包，验证票据后发布草稿。
 
    ```sh
-   ./scripts/publish-notarized-release.sh v0.4.1 TEAM_ID NOTARYTOOL_PROFILE
+   ./scripts/publish-notarized-release.sh v0.5.0 TEAM_ID NOTARYTOOL_PROFILE
    ```
 
 3. Release 公开后，流水线会验证 macOS 签名和公证票据，并用正式安装包的 SHA-256 更新 Homebrew cask。
