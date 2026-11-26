@@ -46,7 +46,7 @@ func main() {
 		MinHeight:        610,
 		BackgroundColour: application.NewRGB(246, 247, 245),
 		EnableFileDrop:   true,
-		Mac:              application.MacWindow{TitleBar: application.MacTitleBarHiddenInset, InvisibleTitleBarHeight: 48},
+		Mac:              application.MacWindow{TitleBar: application.MacTitleBarHiddenInset, InvisibleTitleBarHeight: 28},
 	})
 	service.window = window
 	window.OnWindowEvent(events.Common.WindowFilesDropped, func(e *application.WindowEvent) {

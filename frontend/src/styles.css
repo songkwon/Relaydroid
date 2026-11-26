@@ -49,7 +49,7 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--moss); f
 .side-places button[data-current="true"] { color: #dcf3c7; background: #26372a; }
 .side-bottom { margin-top: auto; border-top: 1px solid #344137; padding-top: 11px; }
 .workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.chrome { height: 37px; flex: 0 0 auto; --wails-draggable: drag; }
+.chrome { height: 26px; flex: 0 0 auto; --wails-draggable: drag; }
 .workspace-header { display: flex; align-items: end; justify-content: space-between; gap: 12px; padding: 16px 25px 21px; flex: 0 0 auto; }
 .workspace-header h1 { margin: 0; font-size: 27px; letter-spacing: -.05em; line-height: 1.18; font-weight: 720; }
 .workspace-header p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
@@ -223,7 +223,7 @@ progress { height: 5px; width: min(260px, 100%); accent-color: var(--moss); }
 }
 @media (max-height: 670px) {
   .workspace-header { padding-block: 8px 13px; }
-  .chrome { height: 31px; }
+  .chrome { height: 24px; }
   .device-empty { padding-bottom: 15px; }
   .device-art { height: 119px; transform: scale(.89); }
 }
