@@ -11,3 +11,5 @@ var errMTPUnavailable = errors.New("此构建支持 ADB。USB 文件传输（MTP
 
 func mtpDevices(context.Context) ([]Device, error)    { return nil, errMTPUnavailable }
 func openMTP(context.Context, string) (remote, error) { return nil, errMTPUnavailable }
+
+func ReleaseMTP(context.Context) {}

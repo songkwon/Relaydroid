@@ -4,7 +4,9 @@ import (
 	"context"
 	"embed"
 	"log"
+	"time"
 
+	"github.com/songkwon/Relay/internal/transfer"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -27,6 +29,9 @@ func main() {
 			log.Print(err)
 		}
 		_ = service.FinderUnmount()
+		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+		defer cancel()
+		transfer.ReleaseMTP(ctx)
 	})
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",

@@ -14,7 +14,7 @@ extern int relayMTPCancel(uintptr_t key);
 // Work only from the USB configuration already enumerated by the OS.
 // Opening devices or probing Microsoft OS descriptors during refresh can
 // contend with ADB, including when the phone exposes only its ADB interface.
-static int relay_mtp_interface(libusb_device *usb, int known_mtp) {
+static int relay_mtp_interface(libusb_device *usb, int known_mtp, uint16_t vendor_id) {
 	struct libusb_config_descriptor *config = NULL;
 	if (libusb_get_active_config_descriptor(usb, &config) != 0) return 0;
 	int found = 0;
@@ -23,8 +23,11 @@ static int relay_mtp_interface(libusb_device *usb, int known_mtp) {
 		for (int j = 0; !found && j < iface->num_altsetting; j++) {
 			const struct libusb_interface_descriptor *alt = &iface->altsetting[j];
 			int standard = alt->bInterfaceClass == LIBUSB_CLASS_IMAGE;
+			// Some Huawei configurations use FF/FF/00 for MTP.
+			int mtp_subclass = alt->bInterfaceSubClass == 0 ||
+				(vendor_id == 0x12d1 && alt->bInterfaceSubClass == 0xff);
 			int vendor = known_mtp && alt->bInterfaceClass == LIBUSB_CLASS_VENDOR_SPEC &&
-				alt->bInterfaceSubClass == 0 && alt->bInterfaceProtocol == 0;
+				mtp_subclass && alt->bInterfaceProtocol == 0;
 			if ((!standard && !vendor) || alt->bNumEndpoints != 3) continue;
 			int in = 0, out = 0, intr = 0;
 			for (int k = 0; k < alt->bNumEndpoints; k++) {
@@ -66,7 +69,7 @@ static int relay_mtp_scan(libusb_context *ctx, LIBMTP_raw_device_t **out, int *c
 				break;
 			}
 		}
-		if (!relay_mtp_interface(usb, known != NULL)) continue;
+		if (!relay_mtp_interface(usb, known != NULL, descriptor.idVendor)) continue;
 		LIBMTP_raw_device_t *device = &result[used++];
 		if (known) device->device_entry = *known;
 		device->device_entry.vendor_id = descriptor.idVendor;
@@ -107,12 +110,25 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf16"
 	"unsafe"
 )
 
 var mtpGate = make(chan struct{}, 1)
 var initMTP sync.Once
+
+const mtpIdleTimeout = 5 * time.Second
+
+// The gate protects both the native session and every access to it. Keeping
+// it briefly between requests lets a post-transfer refresh use the same PTP
+// session, and avoids releasing and claiming the interface on each click.
+var mtpSession struct {
+	id         string
+	device     *C.LIBMTP_mtpdevice_t
+	timer      *time.Timer
+	generation uint64
+}
 
 func lockMTP(ctx context.Context) error {
 	select {
@@ -178,8 +194,31 @@ func mtpDevices(ctx context.Context) ([]Device, error) {
 }
 
 type mtpRemote struct {
-	device *C.LIBMTP_mtpdevice_t
-	names  map[string]map[string]bool
+	device  *C.LIBMTP_mtpdevice_t
+	names   map[string]map[string]bool
+	invalid bool
+}
+
+func resetMTPSession() {
+	mtpSession.generation++
+	if mtpSession.timer != nil {
+		mtpSession.timer.Stop()
+		mtpSession.timer = nil
+	}
+	if mtpSession.device != nil {
+		C.LIBMTP_Release_Device(mtpSession.device)
+	}
+	mtpSession.device = nil
+	mtpSession.id = ""
+}
+
+func ReleaseMTP(ctx context.Context) {
+	select {
+	case mtpGate <- struct{}{}:
+		defer unlockMTP()
+		resetMTPSession()
+	case <-ctx.Done():
+	}
 }
 
 func openMTP(ctx context.Context, id string) (remote, error) {
@@ -196,24 +235,48 @@ func openMTP(ctx context.Context, id string) (remote, error) {
 		if mtpID(raw[i]) != id {
 			continue
 		}
-		device := C.LIBMTP_Open_Raw_Device_Uncached(&raw[i])
-		if device == nil {
-			unlockMTP()
-			return nil, errors.New("无法打开手机，请解锁屏幕并确认 USB 用途为「文件传输」，同时退出其他 Android 文件管理工具")
+		if mtpSession.id != id {
+			resetMTPSession()
+			mtpSession.device = C.LIBMTP_Open_Raw_Device_Uncached(&raw[i])
+			if mtpSession.device == nil {
+				unlockMTP()
+				return nil, errors.New("无法打开手机，请解锁屏幕并确认 USB 用途为「文件传输」，同时退出其他 Android 文件管理工具")
+			}
+			mtpSession.id = id
 		}
-		C.LIBMTP_Clear_Errorstack(device)
-		return &mtpRemote{device: device, names: make(map[string]map[string]bool)}, nil
+		mtpSession.generation++
+		if mtpSession.timer != nil {
+			mtpSession.timer.Stop()
+			mtpSession.timer = nil
+		}
+		C.LIBMTP_Clear_Errorstack(mtpSession.device)
+		return &mtpRemote{device: mtpSession.device, names: make(map[string]map[string]bool)}, nil
+	}
+	if mtpSession.id == id {
+		resetMTPSession()
 	}
 	unlockMTP()
 	return nil, errors.New("USB 设备已断开")
 }
 
 func (m *mtpRemote) close() {
-	C.LIBMTP_Release_Device(m.device)
-	unlockMTP()
+	defer unlockMTP()
+	if m.invalid {
+		resetMTPSession()
+		return
+	}
+	generation := mtpSession.generation
+	mtpSession.timer = time.AfterFunc(mtpIdleTimeout, func() {
+		mtpGate <- struct{}{}
+		defer unlockMTP()
+		if mtpSession.generation == generation {
+			resetMTPSession()
+		}
+	})
 }
 
 func (m *mtpRemote) failure(label string) error {
+	m.invalid = true
 	var details []string
 	for e := C.LIBMTP_Get_Errorstack(m.device); e != nil; e = e.next {
 		if e.error_text != nil {
@@ -338,10 +401,11 @@ func (m *mtpRemote) pull(ctx context.Context, p, target string) error {
 	defer key.Delete()
 	C.LIBMTP_Clear_Errorstack(m.device)
 	if C.relay_mtp_get(m.device, id, filename, C.uintptr_t(key)) != 0 {
+		err := m.failure("从手机读取文件失败")
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return m.failure("从手机读取文件失败")
+		return err
 	}
 	return nil
 }
