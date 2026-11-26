@@ -10,18 +10,13 @@
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
     "@wailsio/runtime": "3.1.0",
-    "figma-squircle": "^1.1.0",
-    "motion": "^12.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "sonner": "^2.0.0"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5",
-    "tailwindcss": "^4.3.5",
     "typescript": "^5.9.3",
     "vite": "^7"
   }

@@ -14,12 +14,12 @@ export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 export CGO_ENABLED=1
 export CGO_CFLAGS="${CGO_CFLAGS:--O2 -g} -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
 export CGO_LDFLAGS="${CGO_LDFLAGS:--O2 -g} -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
-version="${RELAY_VERSION:-${GITHUB_REF_NAME:-0.2.0}}"
+version="${RELAY_VERSION:-${GITHUB_REF_NAME:-0.3.0}}"
 version="${version#v}"
 if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)([-+].*)?$ ]]; then
   version="${BASH_REMATCH[1]}"
 else
-  version=0.2.0
+  version=0.3.0
 fi
 build_number="${GITHUB_RUN_NUMBER:-2}"
 
@@ -38,10 +38,10 @@ npm --prefix frontend run build
 go test -tags mtp -ldflags "-extldflags=-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" ./...
 mkdir -p "$stage/Contents/"{MacOS,Frameworks,Resources/Licenses} "$build/Relay.iconset"
 go build -trimpath -tags mtp -ldflags "-s -w -extldflags=-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" -o "$stage/Contents/MacOS/Relay" .
-swift scripts/icon.swift "$build/icon.png"
+icon_source="assets/Relay-icon.png"
 for n in 16 32 128 256 512; do
-  sips -z "$n" "$n" "$build/icon.png" --out "$build/Relay.iconset/icon_${n}x${n}.png" >/dev/null
-  sips -z "$((n * 2))" "$((n * 2))" "$build/icon.png" --out "$build/Relay.iconset/icon_${n}x${n}@2x.png" >/dev/null
+  sips -z "$n" "$n" "$icon_source" --out "$build/Relay.iconset/icon_${n}x${n}.png" >/dev/null
+  sips -z "$((n * 2))" "$((n * 2))" "$icon_source" --out "$build/Relay.iconset/icon_${n}x${n}@2x.png" >/dev/null
 done
 iconutil -c icns "$build/Relay.iconset" -o "$stage/Contents/Resources/Relay.icns"
 
@@ -66,7 +66,7 @@ cat > "$stage/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>Relay</string>
   <key>CFBundleIdentifier</key><string>app.relaytransfer.desktop</string>
   <key>CFBundleName</key><string>Relay</string>
-  <key>CFBundleDisplayName</key><string>Relay · 渡线</string>
+  <key>CFBundleDisplayName</key><string>Relay</string>
   <key>CFBundleIconFile</key><string>Relay.icns</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
@@ -79,7 +79,8 @@ cat > "$stage/Contents/Info.plist" <<PLIST
 PLIST
 
 licenses="$stage/Contents/Resources/Licenses"
-cp frontend/src/rare-ui/LICENSE "$licenses/Rare-UI.txt"
+cp LICENSE "$licenses/Relay.txt"
+cp assets/Android-icon-LICENSE.txt "$licenses/Android-icon.txt"
 cp scripts/native-notices.txt "$licenses/Native-Dependencies.txt"
 mtp_license="${RELAY_LIBMTP_LICENSE:-$(dirname "$mtp_lib")/COPYING}"
 usb_license="${RELAY_LIBUSB_LICENSE:-$(dirname "$usb_lib")/COPYING}"
@@ -103,10 +104,22 @@ npm --prefix frontend ls --omit=dev --all --parseable |
 
 plutil -lint "$stage/Contents/Info.plist"
 identity="${RELAY_CODESIGN_IDENTITY:--}"
-codesign --force --sign "$identity" "$usb"
-codesign --force --sign "$identity" "$mtp"
-codesign --force --sign "$identity" "$stage"
+if [[ "$identity" == "-" ]]; then
+  codesign --force --sign - "$usb"
+  codesign --force --sign - "$mtp"
+  codesign --force --sign - "$stage"
+else
+  codesign --force --timestamp --sign "$identity" "$usb"
+  codesign --force --timestamp --sign "$identity" "$mtp"
+  codesign --force --timestamp --options runtime --sign "$identity" "$stage"
+fi
 codesign --verify --deep --strict "$stage"
+if [[ -n "${RELAY_NOTARY_PROFILE:-}" ]]; then
+  ditto -c -k --sequesterRsrc --keepParent "$stage" "$build/notarize.zip"
+  xcrun notarytool submit "$build/notarize.zip" --keychain-profile "$RELAY_NOTARY_PROFILE" --wait
+  xcrun stapler staple "$stage"
+  xcrun stapler validate "$stage"
+fi
 mkdir "$build/release"
 cp README.md "$build/release/README.md"
 ditto "$stage" "$build/release/Relay.app"

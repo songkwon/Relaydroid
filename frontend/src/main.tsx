@@ -8,7 +8,7 @@ import {
 import { Events } from "@wailsio/runtime"
 import { api, deviceKey, errorText, modeLabel, type Device, type Direction, type Entry, type Location, type Machine, type Progress, type Scan, type WiFiService } from "./api"
 import { Files } from "./Files"
-import { Toaster, toast } from "./rare-ui/toast"
+import { NoticeStack, useNotices } from "./Notices"
 import "./styles.css"
 
 type Page = "files" | "devices" | "transfers"
@@ -60,6 +60,7 @@ function DeviceArt() {
 }
 
 function App() {
+  const { notices, notify, dismiss } = useNotices()
   const [page, setPage] = useState<Page>("files")
   const [machine, setMachine] = useState<Machine>()
   const [scan, setScan] = useState<Scan>()
@@ -124,23 +125,23 @@ function App() {
       const snapshot = await api.scan()
       if (version === scanVersion.current) setScan(snapshot)
     } catch (error) {
-      if (manual) toast.error("无法刷新设备", { description: errorText(error) })
+      if (manual) notify("error", "无法刷新设备", errorText(error))
     } finally {
       scanRunning.current = false
       setScanning(false)
     }
-  }, [])
+  }, [notify])
 
   useEffect(() => {
     api.machine().then(machine => {
       setMachine(machine)
       const start = machine.places.find(place => place.name === "下载") ?? machine.places[0]
       if (start) setLocal(start.path === machine.home ? [start] : [machine.places[0], start])
-    }).catch(error => toast.error("无法读取本机目录", { description: errorText(error) }))
+    }).catch(error => notify("error", "无法读取本机目录", errorText(error)))
     void rescan(true)
     const timer = window.setInterval(() => void rescan(), 2500)
     return () => window.clearInterval(timer)
-  }, [rescan])
+  }, [notify, rescan])
 
   useEffect(() => {
     if (active) setPreferred(previous => previous ?? active)
@@ -170,14 +171,14 @@ function App() {
     try {
       const [path] = await api.choose(localPath, true, false) ?? []
       if (path) goLocal([{ name: path.split(/[/\\]/).filter(Boolean).at(-1) ?? path, path }])
-    } catch (error) { toast.error("无法打开文件夹", { description: errorText(error) }) }
+    } catch (error) { notify("error", "无法打开文件夹", errorText(error)) }
   }
   const upLocal = async () => {
     if (local.length > 1) return goLocal(local.slice(0, -1))
     try {
       const path = await api.parent(localPath)
       if (path !== localPath) goLocal([{ name: path.split(/[/\\]/).filter(Boolean).at(-1) ?? path, path }])
-    } catch (error) { toast.error(errorText(error)) }
+    } catch (error) { notify("error", errorText(error)) }
   }
 
   const discoverWiFi = useCallback(async () => {
@@ -205,11 +206,11 @@ function App() {
   }
 
   const transfer = useCallback(async (direction: Direction, sources: string[]) => {
-    if (running.current) { toast.info("当前传输结束后可继续"); return }
+    if (running.current) { notify("info", "当前传输结束后可继续"); return }
     const device = stableDevice.current
     if (!device || !sources.length || !localPath || !remotePath) return
     if (direction === "upload" && device.kind === "mtp" && remotePath === "/") {
-      toast.info("请先打开手机上的存储空间")
+      notify("info", "请先打开手机上的存储空间")
       return
     }
     const id = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : String(Date.now())
@@ -220,19 +221,19 @@ function App() {
     try {
       await api.transfer({ id, direction, device, sources, destination: direction === "upload" ? remotePath : localPath })
       setTasks(list => list.map(task => task.id === id ? { ...task, done: total, state: "done" } : task))
-      toast.success(direction === "upload" ? "已发送到 Android" : "已保存到电脑", { description: total + " 个项目" })
+      notify("success", direction === "upload" ? "已发送到 Android" : "已保存到电脑", total + " 个项目")
     } catch (error) {
       const detail = errorText(error)
       const cancelled = cancelRequested.current || detail.includes("context canceled")
       setTasks(list => list.map(task => task.id === id ? { ...task, state: cancelled ? "cancelled" : "error", error: detail } : task))
-      if (cancelled) toast.info("传输已停止")
-      else toast.error("部分或全部项目传输失败", { description: detail })
+      if (cancelled) notify("info", "传输已停止")
+      else notify("error", "部分或全部项目传输失败", detail)
     } finally {
       running.current = null
       if (direction === "upload") refreshRemote(value => value + 1)
       else refreshLocal(value => value + 1)
     }
-  }, [localPath, remotePath])
+  }, [localPath, remotePath, notify])
 
   useEffect(() => Events.On("relay:progress", (event) => {
     const progress = event.data as Progress
@@ -246,12 +247,12 @@ function App() {
     try {
       const selected = await api.choose(localPath, folders, true)
       if (selected?.length) await transfer("upload", selected)
-    } catch (error) { toast.error("无法选择上传项目", { description: errorText(error) }) }
+    } catch (error) { notify("error", "无法选择上传项目", errorText(error)) }
   }
 
   const cancel = async (id: string) => {
     try { cancelRequested.current = true; await api.cancel(id) }
-    catch (error) { toast.error("无法停止传输", { description: errorText(error) }) }
+    catch (error) { notify("error", "无法停止传输", errorText(error)) }
   }
 
   const mountInFinder = async () => {
@@ -261,13 +262,13 @@ function App() {
       if (mounted) {
         await api.finderUnmount()
         setMounted(false)
-        toast.success("已推出 Finder 中的设备")
+        notify("success", "已推出 Finder 中的设备")
       } else if (active) {
         await api.finderMount(active)
         setMounted(true)
-        toast.success("已在 Finder 中挂载", { description: "可在 Finder 浏览和拷出文件。写入请使用 Relay。" })
+        notify("success", "已在 Finder 中挂载", "可在 Finder 浏览和拷出文件。写入请使用 Relay。")
       }
-    } catch (error) { toast.error("Finder 操作失败", { description: errorText(error) }) }
+    } catch (error) { notify("error", "Finder 操作失败", errorText(error)) }
     finally { setMountBusy(false) }
   }
 
@@ -284,7 +285,7 @@ function App() {
     scanVersion.current++
     if (owner?.id === id) setPreferred(legacyOrigin.current ?? usb)
     setScan(previous => previous ? { ...previous, legacy: undefined, devices: previous.devices.filter(d => d.id !== id) } : previous)
-    toast.success("已关闭手机上的临时无线连接")
+    notify("success", "已关闭手机上的临时无线连接")
     void rescan()
   }
 
@@ -296,7 +297,7 @@ function App() {
       if (deviceKey(device) === ownerKey) setPreferred(usb)
       setScan(previous => previous ? { ...previous, devices: previous.devices.filter(d => deviceKey(d) !== deviceKey(device)) } : previous)
       void rescan()
-    } catch (error) { toast.error("无法断开连接", { description: errorText(error) }) }
+    } catch (error) { notify("error", "无法断开连接", errorText(error)) }
   }
 
   const submit = async () => {
@@ -320,7 +321,7 @@ function App() {
           device = result.device
           setCode("")
           if (!device) {
-            toast.success("已完成配对，请连接设备")
+            notify("success", "已完成配对，请连接设备")
             setWifiStep("connect")
             setEndpoint(result.endpoint ?? "")
             void discoverWiFi()
@@ -331,7 +332,7 @@ function App() {
         if (device) {
           scanVersion.current++
           selectDevice(device)
-          toast.success("已连接 Wi-Fi")
+          notify("success", "已连接 Wi-Fi")
           setDialog(undefined)
         }
         return
@@ -343,7 +344,7 @@ function App() {
       setRemoteSelected([])
       refreshRemote(value => value + 1)
       setDialog(undefined)
-      toast.success({ folder: "文件夹已创建", rename: "已重命名", delete: "已删除" }[dialog as "folder" | "rename" | "delete"])
+      notify("success", { folder: "文件夹已创建", rename: "已重命名", delete: "已删除" }[dialog as "folder" | "rename" | "delete"])
     } catch (error) { setFormError(errorText(error)) }
     finally {
       setDialogBusy(false)
@@ -352,8 +353,8 @@ function App() {
   }
 
   const close = () => setDialog(undefined)
-  const external = (target: string) => void api.openURL(target).catch(error => toast.error(errorText(error)))
-  const activateLocal = (entry: Entry) => entry.directory ? goLocal([...local, { name: entry.name, path: entry.path }]) : void api.reveal(entry.path).catch(error => toast.error(errorText(error)))
+  const external = (target: string) => void api.openURL(target).catch(error => notify("error", errorText(error)))
+  const activateLocal = (entry: Entry) => entry.directory ? goLocal([...local, { name: entry.name, path: entry.path }]) : void api.reveal(entry.path).catch(error => notify("error", errorText(error)))
   const activateRemote = (entry: Entry) => entry.directory ? goRemote([...remote, { name: entry.name, path: entry.path }]) : setRemoteSelected([entry.path])
 
   const navItems = [
@@ -364,7 +365,7 @@ function App() {
 
   return <div className="app" data-os={machine?.os ?? (navigator.userAgent.includes("Mac") ? "darwin" : "")}>
     <aside className="sidebar" aria-label="侧栏">
-      <div className="brand"><span className="brand-mark"><ArrowsLeftRight size={20} weight="bold"/></span><span>Relay</span><span className="brand-zh">渡线</span></div>
+      <div className="brand"><span className="brand-mark"><ArrowsLeftRight size={20} weight="bold"/></span><span>Relay</span></div>
       <nav className="nav">
         {navItems.map(({ id, icon: Icon, label }) => <button key={id} className={page === id ? "nav-current" : ""} aria-current={page === id ? "page" : undefined} onClick={() => setPage(id)}>
           <Icon size={19} weight={page === id ? "duotone" : "regular"}/><span>{label}</span>{id === "transfers" && activeTask && <span className="nav-dot"/>}
@@ -384,7 +385,7 @@ function App() {
     </aside>
 
     <main className="workspace">
-      <div className="chrome" aria-hidden="true"><span>Relay · 渡线</span></div>
+      <div className="chrome" aria-hidden="true"><span>Relay</span></div>
       <header className="workspace-header">
         <div><h1>{navItems.find(item => item.id === page)?.label}</h1><p>{page === "files" ? "在电脑和 Android 之间传输文件" : page === "devices" ? "通过 USB 或 Wi-Fi 连接 Android" : "查看本次打开应用以来的传输"}</p></div>
         <div className="workspace-actions">
@@ -515,8 +516,9 @@ function App() {
         {formError && <p className="form-error" role="alert">{formError}</p>}
         <div className="modal-actions"><button type="button" className="button secondary" disabled={dialogBusy} onClick={close}>取消</button><button className={"button " + (dialog === "delete" ? "danger" : "primary")} disabled={dialogBusy}>{dialogBusy ? "正在处理…" : dialog === "delete" ? "删除" : "确认"}</button></div>
       </form>}
+      <NoticeStack notices={notices} dismiss={dismiss}/>
     </Modal>}
-    <Toaster position="bottom-right" />
+    {!dialog && <NoticeStack notices={notices} dismiss={dismiss}/>}
   </div>
 }
 

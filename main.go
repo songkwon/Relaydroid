@@ -14,11 +14,15 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed assets/Relay-icon.png
+var appIcon []byte
+
 func main() {
 	service := &Relay{jobs: make(map[string]job)}
 	app := application.New(application.Options{
 		Name:        "Relay",
 		Description: "Android 文件传输",
+		Icon:        appIcon,
 		Assets:      application.AssetOptions{Handler: application.BundledAssetFileServer(assets)},
 		Services:    []application.Service{application.NewService(service)},
 		Mac:         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
@@ -35,7 +39,7 @@ func main() {
 	})
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
-		Title:            "Relay · 渡线",
+		Title:            "Relay",
 		Width:            1200,
 		Height:           780,
 		MinWidth:         850,

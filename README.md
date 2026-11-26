@@ -1,10 +1,24 @@
-# Relay · 渡线
+# Relay
 
 Relay 在电脑和 Android 之间传输文件。桌面界面采用 Go 1.26、Wails 3、React 和 TypeScript，提供中文双栏浏览器。
 
 ## 安装和连接
 
-从 [GitHub Actions](https://github.com/songkwon/Relay/actions/workflows/package.yml) 获取最近一次成功构建，或到 [Releases](https://github.com/songkwon/Relay/releases) 查看带版本标签的构建。
+macOS 用户可用 Homebrew 安装。首次添加 tap 后，Homebrew 会按 Mac 架构下载对应的发布包并校验 SHA-256。
+
+```sh
+brew tap songkwon/relay https://github.com/songkwon/Relay.git
+brew install --cask songkwon/relay/relay-transfer
+```
+
+更新时运行：
+
+```sh
+brew update
+brew upgrade --cask songkwon/relay/relay-transfer
+```
+
+所有平台的下载包见 [GitHub Releases](https://github.com/songkwon/Relay/releases)。开发构建见 [GitHub Actions](https://github.com/songkwon/Relay/actions/workflows/package.yml)。
 
 | 平台 | 架构 | 包格式 | 可用连接 |
 | --- | --- | --- | --- |
@@ -43,8 +57,8 @@ Relay 保留当前设备和所在目录。USB 或 Wi-Fi 暂时断开时，同一
 pwsh -File scripts/package-windows.ps1 -Architecture amd64
 ```
 
-产物在 `build/`。macOS 可以用 `RELAY_CODESIGN_IDENTITY` 指定签名证书。CI 在 `main` 更新、PR 或手动运行时上传四个目标的 ZIP。推送形如 `v0.2.0` 的标签会在四个目标成功后发布 GitHub Release 和 SHA-256 校验文件。
+产物在 `build/`。macOS 可以用 `RELAY_CODESIGN_IDENTITY` 指定 Developer ID Application 证书，并通过 `RELAY_NOTARY_PROFILE` 指定已有的 notarytool 钥匙串配置来公证。CI 在 `main` 更新、PR 或手动运行时上传四个目标的 ZIP。推送形如 `v0.3.0` 的稳定版本标签会在四个目标成功后发布 GitHub Release 和 SHA-256 校验文件，并更新同仓库的 Homebrew cask。
 
 ## 组件和许可证
 
-操作通知采用 [Rare UI Toast](https://www.rareui.com/components/toast)。其许可证位于 `frontend/src/rare-ui/LICENSE`，并随应用包分发。原生依赖见 `scripts/native-notices.txt`。
+Relay 自身采用 [MIT License](LICENSE)。第三方依赖的许可证随包分发，libmtp 和 libusb 的对应源码归档随 GitHub Release 提供。原生依赖说明见 `scripts/native-notices.txt`。图标中的 Android 机器人出处与授权见 [图标署名](assets/Android-icon-LICENSE.txt)。

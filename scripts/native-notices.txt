@@ -1,5 +1,6 @@
 Relay dynamically links libmtp and libusb. Each library can be replaced with a
 compatible build and the resulting application can be re-signed.
+The corresponding source archives are available with each GitHub Release.
 
 libmtp 1.1.23
 https://github.com/libmtp/libmtp/tree/v1.1.23

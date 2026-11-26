@@ -15,17 +15,29 @@ Set-Location (Join-Path $PSScriptRoot "..")
 npm ci --prefix frontend --no-audit --no-fund
 npm run build --prefix frontend
 
-$env:GOOS = "windows"
-$env:GOARCH = $Architecture
-$env:CGO_ENABLED = "0"
-$env:GOFLAGS = "-mod=readonly"
-go test ./...
-
 $dir = Join-Path $Output "Relay-windows-$Architecture"
 $licenses = Join-Path $dir "Licenses"
 New-Item -ItemType Directory -Force -Path $licenses | Out-Null
 $binary = Join-Path $dir "Relay.exe"
-go build -trimpath -ldflags "-s -w -H=windowsgui" -o $binary .
+
+$version = "0.3.0"
+if ($env:GITHUB_REF_NAME -match '^v([0-9]+\.[0-9]+\.[0-9]+)$') { $version = $Matches[1] }
+$resource = "relayicon_windows_$Architecture.syso"
+if (Test-Path $resource) { throw "Remove the existing generated resource before building: $resource" }
+try {
+    go run github.com/tc-hib/go-winres@v0.3.3 simply --arch $Architecture --out relayicon `
+        --manifest gui --icon assets/Relay-icon.png --product-name Relay --original-filename Relay.exe `
+        --file-version $version --product-version $version
+
+    $env:GOOS = "windows"
+    $env:GOARCH = $Architecture
+    $env:CGO_ENABLED = "0"
+    $env:GOFLAGS = "-mod=readonly"
+    go test ./...
+    go build -trimpath -ldflags "-s -w -H=windowsgui" -o $binary .
+} finally {
+    if (Test-Path $resource) { Remove-Item -LiteralPath $resource }
+}
 
 $pe = [IO.File]::ReadAllBytes((Resolve-Path $binary))
 $header = [BitConverter]::ToInt32($pe, 60)
@@ -34,7 +46,8 @@ $expected = if ($Architecture -eq "amd64") { 0x8664 } else { 0xAA64 }
 if ($machine -ne $expected) { throw "Unexpected PE machine type: $machine" }
 
 Copy-Item README.md $dir
-Copy-Item frontend/src/rare-ui/LICENSE (Join-Path $licenses "Rare-UI.txt")
+Copy-Item LICENSE (Join-Path $licenses "Relay.txt")
+Copy-Item assets/Android-icon-LICENSE.txt (Join-Path $licenses "Android-icon.txt")
 Copy-Item (Join-Path (go env GOROOT) "LICENSE") (Join-Path $licenses "Go.txt")
 
 go list -deps -f '{{with .Module}}{{if and (not .Main) .Dir}}{{.Path}}|{{.Dir}}{{end}}{{end}}' . |
