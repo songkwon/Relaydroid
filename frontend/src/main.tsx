@@ -386,7 +386,7 @@ function App() {
     </aside>
 
     <main className="workspace">
-      <div className="chrome" aria-hidden="true"><span>Relaydroid</span></div>
+      <div className="chrome" aria-hidden="true"/>
       <header className="workspace-header">
         <div><h1>{navItems.find(item => item.id === page)?.label}</h1><p>{page === "files" ? "在电脑和 Android 之间传输文件" : page === "devices" ? "通过 USB 或 Wi-Fi 连接 Android" : "查看本次打开应用以来的传输"}</p></div>
         <div className="workspace-actions">
