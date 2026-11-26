@@ -8,6 +8,7 @@ import {
 import { Events } from "@wailsio/runtime"
 import { api, deviceKey, errorText, modeLabel, type Device, type Direction, type Entry, type Location, type Machine, type Progress, type Scan, type WiFiService } from "./api"
 import { Files } from "./Files"
+import relaydroidIcon from "./assets/relaydroid-icon.png"
 import { NoticeStack, useNotices } from "./Notices"
 import "./styles.css"
 
@@ -365,7 +366,7 @@ function App() {
 
   return <div className="app" data-os={machine?.os ?? (navigator.userAgent.includes("Mac") ? "darwin" : "")}>
     <aside className="sidebar" aria-label="侧栏">
-      <div className="brand"><span className="brand-mark"><ArrowsLeftRight size={20} weight="bold"/></span><span>Relaydroid</span></div>
+      <div className="brand"><img className="brand-mark" src={relaydroidIcon} alt=""/><span>Relaydroid</span></div>
       <nav className="nav">
         {navItems.map(({ id, icon: Icon, label }) => <button key={id} className={page === id ? "nav-current" : ""} aria-current={page === id ? "page" : undefined} onClick={() => setPage(id)}>
           <Icon size={19} weight={page === id ? "duotone" : "regular"}/><span>{label}</span>{id === "transfers" && activeTask && <span className="nav-dot"/>}
