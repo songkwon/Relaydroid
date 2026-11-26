@@ -1,10 +1,12 @@
-name: Package Relay
+name: Package Relaydroid
 
 on:
   push:
     branches: [main]
     tags: ['v*']
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -12,6 +14,7 @@ permissions:
 
 jobs:
   package:
+    if: github.event_name != 'release'
     name: ${{ matrix.platform }} / ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -57,11 +60,11 @@ jobs:
           command -v pkg-config || brew install pkgconf
           ./scripts/build-macos-deps.sh
           ./scripts/package-macos.sh
-          unzip -tq "build/Relay-macOS-$TARGET_ARCH.zip"
-          codesign --verify --deep --strict build/Relay.app
+          unzip -tq "build/Relaydroid-macOS-$TARGET_ARCH.zip"
+          codesign --verify --deep --strict build/Relaydroid.app
           if [[ "$TARGET_ARCH" = arm64 ]]; then expected=arm64; else expected=x86_64; fi
-          test "$(lipo -archs build/Relay.app/Contents/MacOS/Relay)" = "$expected"
-          for library in build/Relay.app/Contents/Frameworks/*.dylib; do
+          test "$(lipo -archs build/Relaydroid.app/Contents/MacOS/Relaydroid)" = "$expected"
+          for library in build/Relaydroid.app/Contents/Frameworks/*.dylib; do
             test "$(lipo -archs "$library")" = "$expected"
           done
 
@@ -75,26 +78,51 @@ jobs:
       - name: Upload package
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: Relay-${{ matrix.platform }}-${{ matrix.arch }}
-          path: build/Relay-${{ matrix.platform }}-${{ matrix.arch }}.zip
+          name: Relaydroid-${{ matrix.platform }}-${{ matrix.arch }}
+          path: build/Relaydroid-${{ matrix.platform }}-${{ matrix.arch }}.zip
           if-no-files-found: error
 
       - name: Upload corresponding macOS library sources
         if: matrix.platform == 'macOS' && matrix.arch == 'arm64' && startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: Relay-native-sources
+          name: Relaydroid-native-sources
           path: build/native/sources/*
           if-no-files-found: error
 
-  release:
-    name: Publish GitHub Release and Homebrew cask
+  prepare_release:
+    name: Prepare release draft
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: package
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: Relaydroid-*
+          path: release-assets
+          merge-multiple: true
+      - name: Create release draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exit 0; fi
+          cd release-assets
+          sha256sum Relaydroid-*.zip libmtp-*.tar.gz libusb-*.tar.bz2 > SHA256SUMS.txt
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --generate-notes \
+            Relaydroid-*.zip libmtp-*.tar.gz libusb-*.tar.bz2 SHA256SUMS.txt
+
+  publish_cask:
+    name: Verify published macOS packages and update Homebrew
+    if: github.event_name == 'release' && !github.event.release.prerelease && github.event.release.tag_name != 'v0.3.0'
+    runs-on: macos-26
     timeout-minutes: 10
     concurrency:
-      group: relay-release
+      group: relaydroid-homebrew
       cancel-in-progress: false
     permissions:
       contents: write
@@ -102,44 +130,38 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: Relay-*
-          path: release-assets
-          merge-multiple: true
-
-      - name: Publish or resume GitHub Release
+      - name: Verify signed and notarized packages
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Use a stable vMAJOR.MINOR.PATCH tag."
-            exit 1
-          fi
-          mkdir published
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS.txt --dir published
-          else
-            cd release-assets
-            sha256sum Relay-*.zip libmtp-*.tar.gz libusb-*.tar.bz2 > SHA256SUMS.txt
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
-              Relay-*.zip libmtp-*.tar.gz libusb-*.tar.bz2 SHA256SUMS.txt
-            cp SHA256SUMS.txt ../published/SHA256SUMS.txt
-          fi
-
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          assets="$(mktemp -d)"
+          trap 'rm -rf "$assets"' EXIT
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern 'Relaydroid-macOS-*.zip' --dir "$assets"
+          for arch in arm64 amd64; do
+            zip="$assets/Relaydroid-macOS-$arch.zip"
+            ditto -x -k "$zip" "$assets/$arch"
+            app="$assets/$arch/Relaydroid.app"
+            if [[ "$arch" = arm64 ]]; then machine=arm64; else machine=x86_64; fi
+            test "$(lipo -archs "$app/Contents/MacOS/Relaydroid")" = "$machine"
+            codesign --verify --deep --strict "$app"
+            xcrun stapler validate "$app"
+          done
+          (cd "$assets" && shasum -a 256 Relaydroid-macOS-*.zip) > "$RUNNER_TEMP/relaydroid-sha256.txt"
       - name: Update Homebrew cask
         shell: bash
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
           git pull --ff-only origin "$DEFAULT_BRANCH"
-          python3 scripts/update-cask.py "$GITHUB_REF_NAME" published/SHA256SUMS.txt
-          git add Casks/relay-transfer.rb
+          python3 scripts/update-cask.py "$RELEASE_TAG" "$RUNNER_TEMP/relaydroid-sha256.txt"
+          git add Casks/relaydroid.rb
           if git diff --cached --quiet; then exit 0; fi
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m "Update Relay Homebrew cask to $GITHUB_REF_NAME"
+            commit -m "Update Relaydroid Homebrew cask to $RELEASE_TAG"
           git push origin "HEAD:$DEFAULT_BRANCH"

@@ -5,21 +5,21 @@ cd "$(dirname "$0")/.."
 dist="${1:-$PWD/build}"
 mkdir -p "$dist"
 dist="$(cd "$dist" && pwd)"
-app="$dist/Relay.app"
+app="$dist/Relaydroid.app"
 build="$(mktemp -d)"
 trap 'rm -rf "$build"' EXIT
-stage="$build/Relay.app"
+stage="$build/Relaydroid.app"
 arch="$(go env GOARCH)"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
 export CGO_ENABLED=1
 export CGO_CFLAGS="${CGO_CFLAGS:--O2 -g} -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
 export CGO_LDFLAGS="${CGO_LDFLAGS:--O2 -g} -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
-version="${RELAY_VERSION:-${GITHUB_REF_NAME:-0.3.0}}"
+version="${RELAY_VERSION:-${GITHUB_REF_NAME:-0.4.0}}"
 version="${version#v}"
 if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)([-+].*)?$ ]]; then
   version="${BASH_REMATCH[1]}"
 else
-  version=0.3.0
+  version=0.4.0
 fi
 build_number="${GITHUB_RUN_NUMBER:-2}"
 
@@ -36,18 +36,18 @@ usb_source="$(find -L "$usb_lib" -maxdepth 1 -name 'libusb-1.0.0.dylib' -print -
 npm --prefix frontend ci --no-audit --no-fund
 npm --prefix frontend run build
 go test -tags mtp -ldflags "-extldflags=-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" ./...
-mkdir -p "$stage/Contents/"{MacOS,Frameworks,Resources/Licenses} "$build/Relay.iconset"
-go build -trimpath -tags mtp -ldflags "-s -w -extldflags=-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" -o "$stage/Contents/MacOS/Relay" .
-icon_source="assets/Relay-icon.png"
+mkdir -p "$stage/Contents/"{MacOS,Frameworks,Resources/Licenses} "$build/Relaydroid.iconset"
+go build -trimpath -tags mtp -ldflags "-s -w -extldflags=-mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" -o "$stage/Contents/MacOS/Relaydroid" .
+icon_source="assets/Relaydroid-icon.png"
 for n in 16 32 128 256 512; do
-  sips -z "$n" "$n" "$icon_source" --out "$build/Relay.iconset/icon_${n}x${n}.png" >/dev/null
-  sips -z "$((n * 2))" "$((n * 2))" "$icon_source" --out "$build/Relay.iconset/icon_${n}x${n}@2x.png" >/dev/null
+  sips -z "$n" "$n" "$icon_source" --out "$build/Relaydroid.iconset/icon_${n}x${n}.png" >/dev/null
+  sips -z "$((n * 2))" "$((n * 2))" "$icon_source" --out "$build/Relaydroid.iconset/icon_${n}x${n}@2x.png" >/dev/null
 done
-iconutil -c icns "$build/Relay.iconset" -o "$stage/Contents/Resources/Relay.icns"
+iconutil -c icns "$build/Relaydroid.iconset" -o "$stage/Contents/Resources/Relaydroid.icns"
 
 mtp="$stage/Contents/Frameworks/libmtp.9.dylib"
 usb="$stage/Contents/Frameworks/libusb-1.0.0.dylib"
-binary="$stage/Contents/MacOS/Relay"
+binary="$stage/Contents/MacOS/Relaydroid"
 cp -L "$mtp_source" "$mtp"
 cp -L "$usb_source" "$usb"
 chmod u+w "$mtp" "$usb" "$binary"
@@ -63,23 +63,23 @@ cat > "$stage/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>CFBundleExecutable</key><string>Relay</string>
+  <key>CFBundleExecutable</key><string>Relaydroid</string>
   <key>CFBundleIdentifier</key><string>app.relaytransfer.desktop</string>
-  <key>CFBundleName</key><string>Relay</string>
-  <key>CFBundleDisplayName</key><string>Relay</string>
-  <key>CFBundleIconFile</key><string>Relay.icns</string>
+  <key>CFBundleName</key><string>Relaydroid</string>
+  <key>CFBundleDisplayName</key><string>Relaydroid</string>
+  <key>CFBundleIconFile</key><string>Relaydroid.icns</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>CFBundleVersion</key><string>$build_number</string>
   <key>LSMinimumSystemVersion</key><string>$MACOSX_DEPLOYMENT_TARGET</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSLocalNetworkUsageDescription</key><string>Relay 在局域网中连接你配对的 Android 设备。</string>
+  <key>NSLocalNetworkUsageDescription</key><string>Relaydroid 在局域网中连接你配对的 Android 设备。</string>
 </dict></plist>
 PLIST
 
 licenses="$stage/Contents/Resources/Licenses"
-cp LICENSE "$licenses/Relay.txt"
+cp LICENSE "$licenses/Relaydroid.txt"
 cp assets/Android-icon-LICENSE.txt "$licenses/Android-icon.txt"
 cp scripts/native-notices.txt "$licenses/Native-Dependencies.txt"
 mtp_license="${RELAY_LIBMTP_LICENSE:-$(dirname "$mtp_lib")/COPYING}"
@@ -122,11 +122,11 @@ if [[ -n "${RELAY_NOTARY_PROFILE:-}" ]]; then
 fi
 mkdir "$build/release"
 cp README.md "$build/release/README.md"
-ditto "$stage" "$build/release/Relay.app"
-ditto -c -k --sequesterRsrc "$build/release" "$dist/Relay-macOS-$arch.zip"
+ditto "$stage" "$build/release/Relaydroid.app"
+ditto -c -k --sequesterRsrc "$build/release" "$dist/Relaydroid-macOS-$arch.zip"
 if [ -e "$app" ]; then mv "$app" "$build/previous.app"; fi
-if ! mv "$build/release/Relay.app" "$app"; then
+if ! mv "$build/release/Relaydroid.app" "$app"; then
   if [ -e "$build/previous.app" ]; then mv "$build/previous.app" "$app"; fi
   exit 1
 fi
-printf '%s\n' "$dist/Relay-macOS-$arch.zip"
+printf '%s\n' "$dist/Relaydroid-macOS-$arch.zip"

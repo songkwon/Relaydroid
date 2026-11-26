@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/songkwon/Relay/internal/transfer"
+	"github.com/songkwon/relaydroid/internal/transfer"
 	"golang.org/x/net/webdav"
 )
 
@@ -22,7 +22,7 @@ type finderMount struct {
 	point  string
 }
 
-func (r *Relay) FinderMount(ctx context.Context, device transfer.Device) (string, error) {
+func (r *Relaydroid) FinderMount(ctx context.Context, device transfer.Device) (string, error) {
 	r.mountMu.Lock()
 	defer r.mountMu.Unlock()
 	if r.mount != nil {
@@ -79,13 +79,13 @@ func mountFinderVolume(ctx context.Context, device transfer.Device) (*finderMoun
 		}),
 	}
 	go func() { _ = server.Serve(listener) }()
-	point, err := os.MkdirTemp("", "Relay-Android-")
+	point, err := os.MkdirTemp("", "Relaydroid-Android-")
 	if err != nil {
 		server.Close()
 		return nil, err
 	}
 	url := "http://" + host + prefix + "/"
-	out, err := exec.CommandContext(ctx, "/sbin/mount_webdav", "-S", "-v", "Relay Android", "-o", "rdonly", url, point).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "/sbin/mount_webdav", "-S", "-v", "Relaydroid Android", "-o", "rdonly", url, point).CombinedOutput()
 	if err != nil {
 		server.Close()
 		_ = os.Remove(point)
@@ -94,7 +94,7 @@ func mountFinderVolume(ctx context.Context, device transfer.Device) (*finderMoun
 	return &finderMount{server: server, point: point}, nil
 }
 
-func (r *Relay) FinderUnmount() error {
+func (r *Relaydroid) FinderUnmount() error {
 	r.mountMu.Lock()
 	defer r.mountMu.Unlock()
 	if r.mount == nil {

@@ -1,4 +1,4 @@
-Relay dynamically links libmtp and libusb. Each library can be replaced with a
+Relaydroid dynamically links libmtp and libusb. Each library can be replaced with a
 compatible build and the resulting application can be re-signed.
 The corresponding source archives are available with each GitHub Release.
 

@@ -266,7 +266,7 @@ function App() {
       } else if (active) {
         await api.finderMount(active)
         setMounted(true)
-        notify("success", "已在 Finder 中挂载", "可在 Finder 浏览和拷出文件。写入请使用 Relay。")
+        notify("success", "已在 Finder 中挂载", "可在 Finder 浏览和拷出文件。写入请使用 Relaydroid。")
       }
     } catch (error) { notify("error", "Finder 操作失败", errorText(error)) }
     finally { setMountBusy(false) }
@@ -365,7 +365,7 @@ function App() {
 
   return <div className="app" data-os={machine?.os ?? (navigator.userAgent.includes("Mac") ? "darwin" : "")}>
     <aside className="sidebar" aria-label="侧栏">
-      <div className="brand"><span className="brand-mark"><ArrowsLeftRight size={20} weight="bold"/></span><span>Relay</span></div>
+      <div className="brand"><span className="brand-mark"><ArrowsLeftRight size={20} weight="bold"/></span><span>Relaydroid</span></div>
       <nav className="nav">
         {navItems.map(({ id, icon: Icon, label }) => <button key={id} className={page === id ? "nav-current" : ""} aria-current={page === id ? "page" : undefined} onClick={() => setPage(id)}>
           <Icon size={19} weight={page === id ? "duotone" : "regular"}/><span>{label}</span>{id === "transfers" && activeTask && <span className="nav-dot"/>}
@@ -385,7 +385,7 @@ function App() {
     </aside>
 
     <main className="workspace">
-      <div className="chrome" aria-hidden="true"><span>Relay</span></div>
+      <div className="chrome" aria-hidden="true"><span>Relaydroid</span></div>
       <header className="workspace-header">
         <div><h1>{navItems.find(item => item.id === page)?.label}</h1><p>{page === "files" ? "在电脑和 Android 之间传输文件" : page === "devices" ? "通过 USB 或 Wi-Fi 连接 Android" : "查看本次打开应用以来的传输"}</p></div>
         <div className="workspace-actions">
@@ -420,7 +420,7 @@ function App() {
             {!active && <div className="device-empty">
               <DeviceArt/>
               <h3>{scanning ? "正在查找设备" : owner ? "等待设备重连" : "连接你的 Android"}</h3>
-              <p>{owner ? "Relay 已保留当前目录。重新连接此设备，或到设备列表选择其他连接。" : "用 USB 数据线连接手机，解锁屏幕，并在手机的 USB 设置里选择「文件传输」。"}</p>
+              <p>{owner ? "Relaydroid 已保留当前目录。重新连接此设备，或到设备列表选择其他连接。" : "用 USB 数据线连接手机，解锁屏幕，并在手机的 USB 设置里选择「文件传输」。"}</p>
               <div className="empty-buttons">
                 <button className="button secondary" disabled={scanning} onClick={() => void rescan(true)}>{scanning ? <CircleNotch className="spin" size={17}/> : <Usb size={17}/>}扫描 USB</button>
                 <button className="button secondary" onClick={() => owner ? setPage("devices") : openDialog("wifi")}><Wifi size={17}/>{owner ? "查看设备" : "Wi-Fi 连接"}</button>
@@ -473,7 +473,7 @@ function App() {
       wifi: "连接 Android", help: "连接帮助", settings: "偏好设置", folder: "新建文件夹", rename: "重命名项目", delete: "删除项目",
     })[dialog]} onClose={close} busy={dialogBusy}>
       {dialog === "wifi" && <>
-        <div className="usb-callout"><Usb size={21}/><div><strong>用 USB 数据线连接</strong><p>解锁手机，选择「文件传输」。Relay 会自动查找设备。</p></div><button className="text-button" disabled={scanning || dialogBusy} onClick={() => void rescan(true)}>{scanning ? "扫描中…" : "扫描"}</button></div>
+        <div className="usb-callout"><Usb size={21}/><div><strong>用 USB 数据线连接</strong><p>解锁手机，选择「文件传输」。Relaydroid 会自动查找设备。</p></div><button className="text-button" disabled={scanning || dialogBusy} onClick={() => void rescan(true)}>{scanning ? "扫描中…" : "扫描"}</button></div>
         <div className="modal-tabs" aria-label="Wi-Fi 连接方式">
           <button aria-pressed={wifiStep === "pair"} disabled={dialogBusy} onClick={() => changeWiFiStep("pair")}>六位码配对</button>
           <button aria-pressed={wifiStep === "connect"} disabled={dialogBusy} onClick={() => changeWiFiStep("connect")}>连接已配对</button>

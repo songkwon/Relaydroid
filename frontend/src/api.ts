@@ -11,7 +11,7 @@ export type Direction = "upload" | "download"
 export type TransferRequest = { id: string; device: Device; direction: Direction; destination: string; sources: string[] }
 export type Progress = { id: string; current: string; done: number; total: number }
 
-const invoke = <T,>(name: string, ...args: unknown[]): Promise<T> => Call.ByName("main.Relay." + name, ...args)
+const invoke = <T,>(name: string, ...args: unknown[]): Promise<T> => Call.ByName("main.Relaydroid." + name, ...args)
 
 export const api = {
   machine: () => invoke<Machine>("Machine"),

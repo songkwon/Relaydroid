@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/songkwon/Relay/internal/transfer"
+	"github.com/songkwon/relaydroid/internal/transfer"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -14,13 +14,13 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-//go:embed assets/Relay-icon.png
+//go:embed assets/Relaydroid-icon.png
 var appIcon []byte
 
 func main() {
-	service := &Relay{jobs: make(map[string]job)}
+	service := &Relaydroid{jobs: make(map[string]job)}
 	app := application.New(application.Options{
-		Name:        "Relay",
+		Name:        "Relaydroid",
 		Description: "Android 文件传输",
 		Icon:        appIcon,
 		Assets:      application.AssetOptions{Handler: application.BundledAssetFileServer(assets)},
@@ -39,7 +39,7 @@ func main() {
 	})
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
-		Title:            "Relay",
+		Title:            "Relaydroid",
 		Width:            1200,
 		Height:           780,
 		MinWidth:         850,

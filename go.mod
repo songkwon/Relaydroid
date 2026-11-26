@@ -1,4 +1,4 @@
-module github.com/songkwon/Relay
+module github.com/songkwon/relaydroid
 
 go 1.26.0
 
