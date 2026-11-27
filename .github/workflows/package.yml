@@ -13,8 +13,53 @@ permissions:
   contents: read
 
 jobs:
-  package:
+  changes:
+    name: Classify packaging changes
     if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    outputs:
+      package_required: ${{ steps.classify.outputs.package_required }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check whether the changed files need a build
+        id: classify
+        shell: bash
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          package_required=true
+          if [[ "$GITHUB_EVENT_NAME" == 'pull_request' ]]; then
+            before="$(git rev-parse "$GITHUB_SHA^1")"
+          elif [[ "$GITHUB_EVENT_NAME" == 'push' && "$GITHUB_REF_TYPE" == 'branch' ]]; then
+            before="$PUSH_BEFORE"
+          else
+            before=
+          fi
+
+          if [[ -n "$before" && "$before" != '0000000000000000000000000000000000000000' && -f LICENSE && -f README.md ]]; then
+            # Compare the actual merge tree and detect both paths of a rename.
+            if git diff --quiet --no-ext-diff --no-renames "$before" "$GITHUB_SHA" -- . \
+              ':(top,exclude,literal)LICENSE' \
+              ':(top,exclude,glob)README*.md' \
+              ':(top,exclude,literal)CONTRIBUTING.md' \
+              ':(top,exclude,literal)SECURITY.md' \
+              ':(top,exclude,literal).github/pull_request_template.md'; then
+              package_required=false
+            else
+              # Git exits 1 for a real difference and higher for an error.
+              test "$?" -eq 1
+            fi
+          fi
+          printf 'package_required=%s\n' "$package_required" >> "$GITHUB_OUTPUT"
+
+  package:
+    needs: changes
+    if: needs.changes.outputs.package_required == 'true'
     name: ${{ matrix.platform }} / ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -95,13 +140,23 @@ jobs:
   package_gate:
     name: Package checks
     if: always() && github.event_name != 'release'
-    needs: package
+    needs: [changes, package]
     runs-on: ubuntu-latest
     steps:
-      - name: Require all package builds to succeed
+      - name: Verify package checks
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          PACKAGE_REQUIRED: ${{ needs.changes.outputs.package_required }}
           PACKAGE_RESULT: ${{ needs.package.result }}
-        run: test "$PACKAGE_RESULT" = success
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CHANGES_RESULT" = success
+          case "$PACKAGE_REQUIRED:$PACKAGE_RESULT" in
+            true:success) echo "All four package builds passed." ;;
+            false:skipped) echo "Only documentation or license files changed." ;;
+            *) echo "::error::Required package builds did not pass."; exit 1 ;;
+          esac
 
   prepare_release:
     name: Prepare release draft
