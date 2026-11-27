@@ -1,0 +1,6 @@
+/.github/ @songkwon
+/Casks/ @songkwon
+/scripts/publish-notarized-release.sh @songkwon
+/scripts/verify-release-macos.sh @songkwon
+/scripts/open-cask-pr.sh @songkwon
+/scripts/update-cask.py @songkwon
