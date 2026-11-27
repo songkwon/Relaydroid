@@ -37,6 +37,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
@@ -90,6 +92,17 @@ jobs:
           path: build/native/sources/*
           if-no-files-found: error
 
+  package_gate:
+    name: Package checks
+    if: always() && github.event_name != 'release'
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all package builds to succeed
+        env:
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: test "$PACKAGE_RESULT" = success
+
   prepare_release:
     name: Prepare release draft
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -107,61 +120,34 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          relation="$(gh api "repos/$GITHUB_REPOSITORY/compare/$GITHUB_REF_NAME...$DEFAULT_BRANCH" --jq .status)"
+          case "$relation" in
+            identical|ahead) ;;
+            *) echo "::error::Release tags must point to a commit on $DEFAULT_BRANCH."; exit 1 ;;
+          esac
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exit 0; fi
           cd release-assets
           sha256sum Relaydroid-*.zip libmtp-*.tar.gz libusb-*.tar.bz2 > SHA256SUMS.txt
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --generate-notes \
             Relaydroid-*.zip libmtp-*.tar.gz libusb-*.tar.bz2 SHA256SUMS.txt
 
-  publish_cask:
-    name: Verify published macOS packages and update Homebrew
+  verify_release:
+    name: Verify published macOS packages
     if: github.event_name == 'release' && !github.event.release.prerelease && github.event.release.tag_name != 'v0.3.0'
     runs-on: macos-26
     timeout-minutes: 10
-    concurrency:
-      group: relaydroid-homebrew
-      cancel-in-progress: false
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
       - name: Verify signed and notarized packages
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          set -euo pipefail
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          assets="$(mktemp -d)"
-          trap 'rm -rf "$assets"' EXIT
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern 'Relaydroid-macOS-*.zip' --dir "$assets"
-          for arch in arm64 amd64; do
-            zip="$assets/Relaydroid-macOS-$arch.zip"
-            ditto -x -k "$zip" "$assets/$arch"
-            app="$assets/$arch/Relaydroid.app"
-            if [[ "$arch" = arm64 ]]; then machine=arm64; else machine=x86_64; fi
-            test "$(lipo -archs "$app/Contents/MacOS/Relaydroid")" = "$machine"
-            codesign --verify --deep --strict "$app"
-            xcrun stapler validate "$app"
-          done
-          (cd "$assets" && shasum -a 256 Relaydroid-macOS-*.zip) > "$RUNNER_TEMP/relaydroid-sha256.txt"
-      - name: Update Homebrew cask
-        shell: bash
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          set -euo pipefail
-          git pull --ff-only origin "$DEFAULT_BRANCH"
-          python3 scripts/update-cask.py "$RELEASE_TAG" "$RUNNER_TEMP/relaydroid-sha256.txt"
-          git add Casks/relaydroid.rb
-          if git diff --cached --quiet; then exit 0; fi
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m "Update Relaydroid Homebrew cask to $RELEASE_TAG"
-          git push origin "HEAD:$DEFAULT_BRANCH"
+        run: ./scripts/verify-release-macos.sh "$RELEASE_TAG" "$RUNNER_TEMP/relaydroid-sha256.txt"

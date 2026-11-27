@@ -10,6 +10,7 @@ tag="$1"
 team="$2"
 profile="$3"
 repo=songkwon/relaydroid
+script_dir="$(cd "$(dirname "$0")" && pwd)"
 
 [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid release tag." >&2; exit 2; }
 [[ "$team" =~ ^[A-Z0-9]{10}$ ]] || { echo "Invalid Apple Team ID." >&2; exit 2; }
@@ -56,3 +57,4 @@ shasum -a 256 Relaydroid-*.zip libmtp-*.tar.gz libusb-*.tar.bz2 > SHA256SUMS.txt
 test "$(gh release view "$tag" --repo "$repo" --json isDraft --jq .isDraft)" = true
 gh release upload "$tag" --repo "$repo" --clobber Relaydroid-macOS-*.zip SHA256SUMS.txt
 gh release edit "$tag" --repo "$repo" --draft=false --latest
+"$script_dir/open-cask-pr.sh" "$tag"
